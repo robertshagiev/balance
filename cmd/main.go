@@ -12,7 +12,7 @@ import (
 )
 
 func main() {
-	dsn := "root:root@tcp(localhost:3306)/balance_service?charset=utf8mb4&parseTime=True&loc=Local"
+	dsn := "root:root@tcp(localhost:3306)/balance?charset=utf8mb4&parseTime=True&loc=Local"
 	db, err := sql.Open("mysql", dsn)
 	if err != nil {
 		log.Fatalf("Failed to connect to the database: %v", err)
