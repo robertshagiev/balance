@@ -67,7 +67,7 @@ func (r *repository) GetBalance(userID int) (float64, error) {
 	var balance float64
 	err := r.db.QueryRow(`SELECT balance FROM balance_service WHERE user_id = ?`, userID).Scan(&balance)
 	if err == sql.ErrNoRows {
-		return 0, nil
+		return 0, errors.New("user not found")
 	}
 	return balance, err
 }
