@@ -1,0 +1,41 @@
+#Balance Service
+
+#Описание
+Микросервис для работы с балансом пользователей: зачисление средств, списание средств, перевод средств от пользователя к пользователю, метод получения баланса пользователя.
+
+#Структура проекта
+
+- `main.go` - Точка входа в приложение, инициализация и запуск сервера.
+- `internal/handler` - HTTP-обработчики для различных операций с балансом.
+- `internal/model` - Определения структур данных, используемых в проекте.
+- `internal/repository` - Реализация взаимодействия с базой данных.
+- `internal/server` - HTTP-сервер.
+- `internal/usecase` - Бизнес-логика приложения.
+
+#База данных
+
+БД настраивается по файлу migration.sql
+
+#Примеры запросов
+
+1. Начисление средств 
+
+POST http://localhost:8080/balance/introduction 
+'{"user_id": 1, "amount": 500.00}'  
+"Content-Type: application/json"
+
+2. Списание средств 
+
+ POST http://localhost:8080/balance/debit 
+ '{"user_id": 1, "amount": 500.00}' 
+ "Content-Type: application/json"
+
+3. Перевод средств от пользователя к пользователю 
+
+POST http://localhost:8080/balance/transfer 
+'{"from_user_id": 1, "to_user_id": 2, "amount": 500.00}' 
+"Content-Type: application/json"
+
+4. Получение средств
+
+GET http://localhost:8080/balance/get?user_id=1
