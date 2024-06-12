@@ -5,29 +5,49 @@ import (
 	"errors"
 )
 
-type Repository interface {
-	Introduction(userID int, amount float64) error
-	Debit(userID int, amount float64) error
-	Transfer(fromUserID, toUserID int, amount float64) error
-	GetBalance(userID int) (float64, error)
-}
-
 type repository struct {
-	db *sql.DB
+	db Connection
 }
 
-func NewRepository(db *sql.DB) Repository {
-	return &repository{db}
+type Connection interface {
+	Begin() (*sql.Tx, error)
+	Exec(query string, args ...any) (sql.Result, error)
+	QueryRow(query string, args ...any) *sql.Row
 }
+
+func NewRepository(db Connection) *repository {
+	return &repository{db: db}
+}
+
+const (
+	introductionQuery = `INSERT INTO balance_service (user_id, balance) VALUES (?, ?)
+	ON DUPLICATE KEY UPDATE balance = balance + VALUES(balance), updated_at = CURRENT_TIMESTAMP`
+)
 
 func (r *repository) Introduction(userID int, amount float64) error {
-	_, err := r.db.Exec(`INSERT INTO balance_service (user_id, balance) VALUES (?, ?)
-                         ON DUPLICATE KEY UPDATE balance = balance + VALUES(balance), updated_at = CURRENT_TIMESTAMP`, userID, amount)
-	return err
+	tx, err := r.db.Begin()
+	if err != nil {
+		return err
+	}
+
+	defer tx.Rollback()
+
+	if _, err = tx.Exec(introductionQuery, userID, amount); err != nil {
+		return err
+	}
+
+	return tx.Commit()
 }
 
 func (r *repository) Debit(userID int, amount float64) error {
-	result, err := r.db.Exec(`UPDATE balance_service SET balance = balance - ?, updated_at = CURRENT_TIMESTAMP WHERE user_id = ? AND balance >= ?`, amount, userID, amount)
+	tx, err := r.db.Begin()
+	if err != nil {
+		return err
+	}
+
+	defer tx.Rollback()
+
+	result, err := tx.Exec(`UPDATE balance_service SET balance = balance - ?, updated_at = CURRENT_TIMESTAMP WHERE user_id = ? AND balance >= ?`, amount, userID, amount)
 	if err != nil {
 		return err
 	}
@@ -38,7 +58,7 @@ func (r *repository) Debit(userID int, amount float64) error {
 	if rowsAffected == 0 {
 		return errors.New("insufficient funds")
 	}
-	return nil
+	return tx.Commit()
 }
 
 func (r *repository) Transfer(fromUserID, toUserID int, amount float64) error {

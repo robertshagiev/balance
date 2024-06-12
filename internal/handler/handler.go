@@ -5,11 +5,12 @@ import (
 	"encoding/json"
 	"net/http"
 	"strconv"
+
+	"github.com/gorilla/mux"
 )
 
 type Handler struct {
 	usecase ucase
-	mux     *http.ServeMux
 }
 
 type ucase interface {
@@ -20,21 +21,7 @@ type ucase interface {
 }
 
 func NewHandler(u ucase) *Handler {
-	mux := http.NewServeMux()
-	h := &Handler{usecase: u, mux: mux}
-	h.initRoutes()
-	return h
-}
-
-func (h *Handler) initRoutes() {
-	h.mux.HandleFunc("/balance/introduction", h.Introduction)
-	h.mux.HandleFunc("/balance/debit", h.Debit)
-	h.mux.HandleFunc("/balance/transfer", h.Transfer)
-	h.mux.HandleFunc("/balance/get", h.GetBalance)
-}
-
-func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	h.mux.ServeHTTP(w, r)
+	return &Handler{usecase: u}
 }
 
 func (h *Handler) Introduction(w http.ResponseWriter, r *http.Request) {
@@ -111,12 +98,8 @@ func (h *Handler) Transfer(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) GetBalance(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	idStr := r.URL.Query().Get("user_id")
+	vars := mux.Vars(r)
+	idStr := vars["user_id"]
 	userID, err := strconv.Atoi(idStr)
 	if err != nil {
 		http.Error(w, "Invalid user ID", http.StatusBadRequest)

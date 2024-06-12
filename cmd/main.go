@@ -3,10 +3,11 @@ package main
 import (
 	"balance/internal/handler"
 	"balance/internal/repository"
-	"balance/internal/server"
+	"balance/internal/routers"
 	"balance/internal/usecase"
 	"database/sql"
 	"log"
+	"net/http"
 
 	_ "github.com/go-sql-driver/mysql"
 )
@@ -19,13 +20,12 @@ func main() {
 	}
 	defer db.Close()
 
-	repo := repository.NewRepository(db)
-	uc := usecase.NewUsecase(repo)
+	con := repository.NewRepository(db)
+	uc := usecase.NewUsecase(con)
 	h := handler.NewHandler(uc)
 
-	srv := server.NewServer(h, "localhost", "8080")
-	if err := srv.Start(); err != nil {
-		log.Fatalf("Failed to start server: %v", err)
-	}
+	r := routers.NewRouter(h)
 
+	log.Println("Server is starting at :8080")
+	log.Fatal(http.ListenAndServe(":8080", r))
 }
