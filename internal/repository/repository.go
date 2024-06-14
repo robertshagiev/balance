@@ -1,118 +1,83 @@
-package repository
+package usecase
 
 import (
 	"balance/internal/logger"
-	"database/sql"
+	"balance/internal/model"
 	"errors"
+	"fmt"
 )
 
-type repository struct {
-	db     Connection
+type Usecase struct {
+	repo   Repository
 	logger *logger.Logger
 }
 
-type Connection interface {
-	Begin() (*sql.Tx, error)
-	Exec(query string, args ...any) (sql.Result, error)
-	QueryRow(query string, args ...any) *sql.Row
+type Repository interface {
+	Introduction(userID int, amount float64) error
+	Debit(userID int, amount float64) error
+	Transfer(fromUserID, toUserID int, amount float64) error
+	GetBalance(userID int) (float64, error)
 }
 
-func NewRepository(db Connection, log *logger.Logger) *repository {
-	return &repository{db: db, logger: log}
+func NewUsecase(repo Repository, log *logger.Logger) *Usecase {
+	return &Usecase{repo: repo, logger: log}
 }
 
-const (
-	introductionQuery = `INSERT INTO balance_service (user_id, balance) VALUES (?, ?)
-	ON DUPLICATE KEY UPDATE balance = balance + VALUES(balance), updated_at = CURRENT_TIMESTAMP`
-
-	debitQuery = `UPDATE balance_service SET balance = balance - ?, updated_at = CURRENT_TIMESTAMP WHERE user_id = ? AND balance >= ?`
-
-	transferQuery  = `UPDATE balance_service SET balance = balance - ? WHERE user_id = ? AND balance >= ?`
-	transferQuery2 = `INSERT INTO balance_service (user_id, balance) VALUES (?, ?)
-                   ON DUPLICATE KEY UPDATE balance = balance + VALUES(balance), updated_at = CURRENT_TIMESTAMP`
-
-	getBalanceQuery = `SELECT balance FROM balance_service WHERE user_id = ?`
-)
-
-func (r *repository) Introduction(userID int, amount float64) error {
-	tx, err := r.db.Begin()
+func (u *Usecase) Introduction(userID int, amount float64) error {
+	if amount <= 0 {
+		u.logger.Warning(fmt.Sprintf("Invalid amount for Introduction: %f", amount))
+		return errors.New("amount must be greater than zero")
+	}
+	err := u.repo.Introduction(userID, amount)
 	if err != nil {
-		r.logger.Error(err.Error())
+		u.logger.Error(fmt.Sprintf("Introduction failed for user %d: %v", userID, err))
 		return err
 	}
-
-	defer tx.Rollback()
-
-	if _, err = tx.Exec(introductionQuery, userID, amount); err != nil {
-		r.logger.Error(err.Error())
-		return err
-	}
-
-	r.logger.Info("Introduction completed successfully")
-	return tx.Commit()
+	u.logger.Info(fmt.Sprintf("Introduction completed for user %d with amount %f", userID, amount))
+	return nil
 }
 
-func (r *repository) Debit(userID int, amount float64) error {
-	tx, err := r.db.Begin()
+func (u *Usecase) Debit(userID int, amount float64) error {
+	if amount <= 0 {
+		u.logger.Warning(fmt.Sprintf("Invalid amount for Debit: %f", amount))
+		return errors.New("amount must be greater than zero")
+	}
+	err := u.repo.Debit(userID, amount)
 	if err != nil {
-		r.logger.Error(err.Error())
+		u.logger.Error(fmt.Sprintf("Debit failed for user %d: %v", userID, err))
 		return err
 	}
-
-	defer tx.Rollback()
-
-	result, err := tx.Exec(debitQuery, amount, userID, amount)
-	if err != nil {
-		r.logger.Error(err.Error())
-		return err
-	}
-
-	if rowsAffected, err := result.RowsAffected(); err != nil || rowsAffected == 0 {
-		if err != nil {
-			r.logger.Error(err.Error())
-			return err
-		}
-		r.logger.Warning("Insufficient funds")
-		return errors.New("insufficient funds")
-	}
-	r.logger.Info("Debit completed successfully")
-	return tx.Commit()
+	u.logger.Info(fmt.Sprintf("Debit completed for user %d with amount %f", userID, amount))
+	return nil
 }
 
-func (r *repository) Transfer(fromUserID, toUserID int, amount float64) error {
-	tx, err := r.db.Begin()
+func (u *Usecase) Transfer(fromUserID, toUserID int, amount float64) error {
+	if fromUserID == toUserID {
+		u.logger.Warning("Cannot transfer to the same user")
+		return errors.New("cannot transfer to the same user")
+	}
+	if amount <= 0 {
+		u.logger.Warning(fmt.Sprintf("Invalid amount for Transfer: %f", amount))
+		return errors.New("amount must be greater than zero")
+	}
+	err := u.repo.Transfer(fromUserID, toUserID, amount)
 	if err != nil {
-		r.logger.Error(err.Error())
+		u.logger.Error(fmt.Sprintf("Transfer failed from user %d to user %d: %v", fromUserID, toUserID, err))
 		return err
 	}
-
-	defer tx.Rollback()
-
-	if _, err = tx.Exec(transferQuery, amount, fromUserID, amount); err != nil {
-		r.logger.Error(err.Error())
-		return err
-	}
-
-	if _, err = tx.Exec(transferQuery2, toUserID, amount); err != nil {
-		r.logger.Error(err.Error())
-		return err
-	}
-
-	r.logger.Info("Transfer completed successfully")
-	return tx.Commit()
+	u.logger.Info(fmt.Sprintf("Transfer completed from user %d to user %d with amount %f", fromUserID, toUserID, amount))
+	return nil
 }
 
-func (r *repository) GetBalance(userID int) (float64, error) {
-	var balance float64
-	if err := r.db.QueryRow(getBalanceQuery, userID).Scan(&balance); err != nil {
-		if err == sql.ErrNoRows {
-			r.logger.Warning("User not found")
-			return 0, errors.New("user not found")
-		}
-		r.logger.Error(err.Error())
-		return 0, err
+func (u *Usecase) GetBalance(userID int) (model.Balance, error) {
+	balance, err := u.repo.GetBalance(userID)
+	if err != nil {
+		u.logger.Error(fmt.Sprintf("GetBalance failed for user %d: %v", userID, err))
+		return model.Balance{}, err
 	}
-
-	r.logger.Info("Get balance completed successfully")
-	return balance, nil
+	u.logger.Info(fmt.Sprintf("GetBalance completed for user %d", userID))
+	return model.Balance{
+		UserID:  userID,
+		Balance: balance,
+	}, nil
 }
