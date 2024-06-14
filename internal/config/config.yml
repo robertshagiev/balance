@@ -1,0 +1,13 @@
+database:
+  driver: "mysql"
+  user: "root"
+  password: "root"
+  host: "localhost"
+  port: 3306
+
+server:
+  dbname: "balance"
+  charset: "utf8mb4"
+  parseTime: true
+  loc: "Local"
+  port: 8080
